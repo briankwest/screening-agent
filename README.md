@@ -583,4 +583,4 @@ Built with the SignalWire AI Agents SDK.
 
 - SignalWire AI Agents SDK: https://developer.signalwire.com/sdks/agents-sdk
 - SignalWire Documentation: https://developer.signalwire.com/
-- SignalWire Support: https://signalwire.com/support
+- SignalWire Support: support@signalwire.com
