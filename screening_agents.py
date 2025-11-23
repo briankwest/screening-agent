@@ -42,7 +42,8 @@ class HoldAgent(AgentBase):
     def __init__(self):
         super().__init__(
             name="HoldAgent",
-            route="/hold-agent"
+            route="/hold-agent",
+            basic_auth=(SWML_BASIC_AUTH_USER, SWML_BASIC_AUTH_PASSWORD) if SWML_BASIC_AUTH_PASSWORD else None
         )
 
         # Configure agent
@@ -194,7 +195,8 @@ class CallAgent(AgentBase):
     def __init__(self):
         super().__init__(
             name="CallAgent",
-            route="/call-agent"
+            route="/call-agent",
+            basic_auth=(SWML_BASIC_AUTH_USER, SWML_BASIC_AUTH_PASSWORD) if SWML_BASIC_AUTH_PASSWORD else None
         )
 
         # Configure agent
