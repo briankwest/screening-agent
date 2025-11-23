@@ -386,15 +386,23 @@ if __name__ == "__main__":
     else:
         base_url = f"http://{HOST}:{PORT}"
 
+    # Build URL with auth credentials embedded
+    parsed = urllib.parse.urlparse(base_url)
+    if SWML_BASIC_AUTH_PASSWORD:
+        auth_url = f"{parsed.scheme}://{SWML_BASIC_AUTH_USER}:{SWML_BASIC_AUTH_PASSWORD}@{parsed.netloc}"
+    else:
+        auth_url = base_url
+
     print("=" * 60)
     print("Call Screening Agents - SignalWire AI")
     print("=" * 60)
     print(f"\nServer: http://{HOST}:{PORT}")
     if proxy_url:
         print(f"Public URL: {proxy_url}")
-    print(f"\nEndpoints:")
-    print(f"  Hold Agent:  {base_url}/hold-agent")
-    print(f"  Call Agent:  {base_url}/call-agent")
+    print(f"\nEndpoints (with auth):")
+    print(f"  Hold Agent:  {auth_url}/hold-agent")
+    print(f"  Call Agent:  {auth_url}/call-agent")
+    print(f"\nEndpoints (no auth):")
     print(f"  Hold Music:  {base_url}/hold-music.wav")
     print(f"  Web UI:      {base_url}/")
     print(f"\nConfiguration:")

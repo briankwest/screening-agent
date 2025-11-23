@@ -272,6 +272,7 @@ A dual SignalWire AI Agent system for intelligent call screening and transfer. T
 | `FROM_NUMBER` | Yes | - | Caller ID for outbound calls |
 | `SWML_BASIC_AUTH_USER` | No | `signalwire` | Basic auth username for SWML URLs |
 | `SWML_BASIC_AUTH_PASSWORD` | Yes | - | Basic auth password for SWML URLs |
+| `SWML_PROXY_URL_BASE` | No | - | Public URL when behind proxy/tunnel (e.g., ngrok) |
 
 ### Example `.env`
 
@@ -282,6 +283,9 @@ TO_NUMBER=+15551234567
 FROM_NUMBER=+15559876543
 SWML_BASIC_AUTH_USER=signalwire
 SWML_BASIC_AUTH_PASSWORD=your_secure_password
+
+# Optional: Set if using ngrok or other tunnel
+SWML_PROXY_URL_BASE=https://your-subdomain.ngrok.io
 ```
 
 ## Usage
@@ -292,18 +296,22 @@ SWML_BASIC_AUTH_PASSWORD=your_secure_password
 python screening_agents.py
 ```
 
-Output:
+Output (with `SWML_PROXY_URL_BASE` set):
 ```
 ============================================================
-📞 Call Screening Agents - SignalWire AI
+Call Screening Agents - SignalWire AI
 ============================================================
 
 Server: http://0.0.0.0:5001
+Public URL: https://your-subdomain.ngrok.io
 
-Endpoints:
-  Hold Agent:  http://0.0.0.0:5001/hold-agent
-  Call Agent:  http://0.0.0.0:5001/call-agent
-  Hold Music:  http://0.0.0.0:5001/hold-music.wav
+Endpoints (with auth):
+  Hold Agent:  https://signalwire:password@your-subdomain.ngrok.io/hold-agent
+  Call Agent:  https://signalwire:password@your-subdomain.ngrok.io/call-agent
+
+Endpoints (no auth):
+  Hold Music:  https://your-subdomain.ngrok.io/hold-music.wav
+  Web UI:      https://your-subdomain.ngrok.io/
 
 Configuration:
   TO_NUMBER:   +15551234567
@@ -312,6 +320,8 @@ Configuration:
 
 Press Ctrl+C to stop
 ```
+
+The "Endpoints (with auth)" URLs include embedded credentials and can be copied directly into SignalWire webhook configuration.
 
 ### SignalWire Configuration
 
