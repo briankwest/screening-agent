@@ -3,70 +3,525 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hold Transfer Agent</title>
+    <title>Call Screening Agents - SignalWire AI</title>
     <style>
+        :root {
+            --primary: #044cf4;
+            --primary-dark: #0339b8;
+            --secondary: #6c757d;
+            --success: #28a745;
+            --warning: #ffc107;
+            --danger: #dc3545;
+            --light: #f8f9fa;
+            --dark: #212529;
+            --border: #dee2e6;
+        }
+
         * {
+            box-sizing: border-box;
             margin: 0;
             padding: 0;
-            box-sizing: border-box;
         }
 
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: var(--dark);
+            background: linear-gradient(135deg, #f5f7fa 0%, #e4e8ec 100%);
             min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
         }
 
         .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        header {
             text-align: center;
-            padding: 40px;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 20px;
-            backdrop-filter: blur(10px);
-            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+            margin-bottom: 3rem;
         }
 
         h1 {
-            font-size: 3em;
-            margin-bottom: 20px;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+            font-size: 2.5rem;
+            color: var(--primary);
+            margin-bottom: 0.5rem;
         }
 
-        p {
-            font-size: 1.2em;
-            margin-bottom: 30px;
-            opacity: 0.9;
+        .subtitle {
+            font-size: 1.2rem;
+            color: var(--secondary);
         }
 
-        .endpoints {
+        .card {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            padding: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .card h2 {
+            color: var(--primary);
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid var(--border);
+        }
+
+        .card h3 {
+            color: var(--dark);
+            margin: 1.5rem 0 0.75rem;
+        }
+
+        .flow-diagram {
+            background: var(--light);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin: 1rem 0;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            overflow-x: auto;
+            white-space: pre;
+            line-height: 1.4;
+        }
+
+        .agent-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 2rem;
+            margin-top: 2rem;
+        }
+
+        .agent-card {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .agent-header {
+            padding: 1.5rem;
+            color: white;
+        }
+
+        .agent-header.hold {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+        }
+
+        .agent-header.call {
+            background: linear-gradient(135deg, var(--success) 0%, #1e7e34 100%);
+        }
+
+        .agent-header h3 {
+            margin: 0;
+            color: white;
+            font-size: 1.4rem;
+        }
+
+        .agent-header .route {
+            font-family: 'Courier New', monospace;
             background: rgba(255, 255, 255, 0.2);
-            padding: 20px;
-            border-radius: 10px;
-            margin-top: 30px;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            margin-top: 0.5rem;
+            display: inline-block;
         }
 
-        .endpoint {
-            margin: 10px 0;
-            font-family: monospace;
+        .agent-body {
+            padding: 1.5rem;
+        }
+
+        .feature-list {
+            list-style: none;
+            margin: 1rem 0;
+        }
+
+        .feature-list li {
+            padding: 0.5rem 0;
+            padding-left: 1.5rem;
+            position: relative;
+        }
+
+        .feature-list li::before {
+            content: ">";
+            position: absolute;
+            left: 0;
+            color: var(--primary);
+            font-weight: bold;
+        }
+
+        .function-box {
+            background: var(--light);
+            border-left: 4px solid var(--primary);
+            padding: 1rem;
+            margin: 1rem 0;
+            border-radius: 0 8px 8px 0;
+        }
+
+        .function-box h4 {
+            font-family: 'Courier New', monospace;
+            color: var(--primary);
+            margin-bottom: 0.5rem;
+        }
+
+        .function-box p {
+            font-size: 0.9rem;
+            color: var(--secondary);
+            margin-bottom: 0.5rem;
+        }
+
+        .params {
+            font-size: 0.85rem;
+            color: var(--dark);
+        }
+
+        .params code {
+            background: white;
+            padding: 0.15rem 0.4rem;
+            border-radius: 4px;
+            font-size: 0.8rem;
+        }
+
+        .endpoint-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1rem 0;
+        }
+
+        .endpoint-table th,
+        .endpoint-table td {
+            padding: 0.75rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .endpoint-table th {
+            background: var(--light);
+            font-weight: 600;
+        }
+
+        .endpoint-table code {
+            background: var(--light);
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.85rem;
+        }
+
+        .config-section {
+            background: var(--light);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin: 1rem 0;
+        }
+
+        .config-section h4 {
+            margin-bottom: 1rem;
+        }
+
+        .env-var {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .env-var:last-child {
+            border-bottom: none;
+        }
+
+        .env-var code {
+            background: white;
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
+        .status-badge.active {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        footer {
+            text-align: center;
+            padding: 2rem;
+            color: var(--secondary);
+            font-size: 0.9rem;
+        }
+
+        footer a {
+            color: var(--primary);
+            text-decoration: none;
+        }
+
+        footer a:hover {
+            text-decoration: underline;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
+
+            h1 {
+                font-size: 1.8rem;
+            }
+
+            .agent-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .flow-diagram {
+                font-size: 0.75rem;
+            }
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>🎯 Hold Transfer Agent</h1>
-        <p>SignalWire AI Agent with Hold and Slack Notifications</p>
+        <header>
+            <h1>Call Screening Agents</h1>
+            <p class="subtitle">SignalWire AI-Powered Call Screening and Transfer System</p>
+        </header>
 
-        <div class="endpoints">
-            <h2>Endpoints</h2>
-            <div class="endpoint">SWML: /hold-transfer</div>
-            <div class="endpoint">Health: /health</div>
-            <div class="endpoint">Ready: /ready</div>
-            <div class="endpoint">Hold Music: /hold-music.wav</div>
+        <div class="card">
+            <h2>System Overview</h2>
+            <p>This dual-agent system screens incoming calls before connecting them to a human. The AI assistant "Ethan" handles the entire flow, from initial screening to call transfer or rejection.</p>
+
+            <h3>Call Flow</h3>
+            <div class="flow-diagram">
+Incoming Call
+     |
+     v
++------------------+
+|    HoldAgent     |  1. Greets caller as "Ethan"
+|   /hold-agent    |  2. Asks for caller's name
+|                  |  3. Asks reason for calling
++------------------+
+     |
+     | place_call_on_hold()
+     v
++------------------+
+|  Caller on Hold  |  Hold music plays (120s timeout)
+|                  |
++------------------+
+     |
+     | dial RPC to human's phone
+     v
++------------------+
+|    CallAgent     |  1. Greets human: "I have [name] calling about [reason]"
+|   /call-agent    |  2. Asks: "Would you like to take this call?"
+|                  |
++------------------+
+     |
+     +------ accept_call() ------+------ reject_call(message) ------+
+     |                           |                                   |
+     v                           v                                   v
++------------------+    +------------------+               +------------------+
+| Human connected  |    | Caller receives  |               | Caller taken off |
+| to waiting call  |    | rejection msg    |               | hold, given msg  |
++------------------+    +------------------+               +------------------+</div>
         </div>
+
+        <div class="agent-grid">
+            <div class="agent-card">
+                <div class="agent-header hold">
+                    <h3>HoldAgent</h3>
+                    <span class="route">/hold-agent</span>
+                </div>
+                <div class="agent-body">
+                    <p>Screens incoming calls by collecting caller information before attempting to connect them with a human.</p>
+
+                    <ul class="feature-list">
+                        <li>Greets callers warmly as "Ethan"</li>
+                        <li>Collects caller's name</li>
+                        <li>Asks for reason for calling</li>
+                        <li>Places caller on hold with music</li>
+                        <li>Initiates outbound call to human</li>
+                        <li>Handles rejected calls gracefully</li>
+                    </ul>
+
+                    <div class="function-box">
+                        <h4>place_call_on_hold()</h4>
+                        <p>Places caller on hold and dials the human agent.</p>
+                        <div class="params">
+                            <strong>Parameters:</strong><br>
+                            <code>caller_name</code> - Name of the person calling<br>
+                            <code>reason</code> - Reason for the call
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="agent-card">
+                <div class="agent-header call">
+                    <h3>CallAgent</h3>
+                    <span class="route">/call-agent</span>
+                </div>
+                <div class="agent-body">
+                    <p>Handles the outbound call to the human, presenting caller information and allowing them to accept or reject the call.</p>
+
+                    <ul class="feature-list">
+                        <li>Receives caller context via URL params</li>
+                        <li>Greets human with caller info</li>
+                        <li>Allows accepting or rejecting calls</li>
+                        <li>Bridges calls on acceptance</li>
+                        <li>Relays rejection messages to caller</li>
+                    </ul>
+
+                    <div class="function-box">
+                        <h4>accept_call()</h4>
+                        <p>Bridges the human to the waiting caller.</p>
+                        <div class="params">
+                            <strong>Parameters:</strong> None
+                        </div>
+                    </div>
+
+                    <div class="function-box">
+                        <h4>reject_call()</h4>
+                        <p>Sends a message to the caller and releases them from hold.</p>
+                        <div class="params">
+                            <strong>Parameters:</strong><br>
+                            <code>message</code> - Message to relay to the caller
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>API Endpoints</h2>
+            <table class="endpoint-table">
+                <thead>
+                    <tr>
+                        <th>Endpoint</th>
+                        <th>Method</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>/hold-agent</code></td>
+                        <td>GET/POST</td>
+                        <td>SWML webhook for incoming calls - returns HoldAgent SWML</td>
+                    </tr>
+                    <tr>
+                        <td><code>/hold-agent/swaig</code></td>
+                        <td>POST</td>
+                        <td>SWAIG function endpoint for HoldAgent</td>
+                    </tr>
+                    <tr>
+                        <td><code>/call-agent</code></td>
+                        <td>GET/POST</td>
+                        <td>SWML webhook for outbound calls - returns CallAgent SWML</td>
+                    </tr>
+                    <tr>
+                        <td><code>/call-agent/swaig</code></td>
+                        <td>POST</td>
+                        <td>SWAIG function endpoint for CallAgent</td>
+                    </tr>
+                    <tr>
+                        <td><code>/health</code></td>
+                        <td>GET</td>
+                        <td>Health check endpoint (AgentServer built-in)</td>
+                    </tr>
+                    <tr>
+                        <td><code>/hold-music.wav</code></td>
+                        <td>GET</td>
+                        <td>Hold music audio file</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="card">
+            <h2>Configuration</h2>
+            <div class="config-section">
+                <h4>Environment Variables</h4>
+                <div class="env-var">
+                    <span><code>TO_NUMBER</code></span>
+                    <span>Human agent's phone number to dial</span>
+                </div>
+                <div class="env-var">
+                    <span><code>FROM_NUMBER</code></span>
+                    <span>Caller ID for outbound calls</span>
+                </div>
+                <div class="env-var">
+                    <span><code>PORT</code></span>
+                    <span>Server port (default: 5001)</span>
+                </div>
+                <div class="env-var">
+                    <span><code>HOST</code></span>
+                    <span>Server host (default: 0.0.0.0)</span>
+                </div>
+                <div class="env-var">
+                    <span><code>SWML_BASIC_AUTH_USER</code></span>
+                    <span>Basic auth username for SWML endpoints</span>
+                </div>
+                <div class="env-var">
+                    <span><code>SWML_BASIC_AUTH_PASSWORD</code></span>
+                    <span>Basic auth password for SWML endpoints</span>
+                </div>
+            </div>
+
+            <h3>Quick Start</h3>
+            <div class="flow-diagram" style="white-space: pre-wrap;">
+# 1. Install dependencies
+pip install -r requirements.txt
+
+# 2. Configure environment
+cp .env.example .env
+# Edit .env with your phone numbers
+
+# 3. Run the agents
+python screening_agents.py
+
+# 4. Configure SignalWire
+# Point your SignalWire phone number's webhook to:
+# https://your-server.com/hold-agent</div>
+        </div>
+
+        <div class="card">
+            <h2>Technical Details</h2>
+
+            <h3>SWML Actions Used</h3>
+            <ul class="feature-list">
+                <li><strong>hold</strong> - Places caller on hold with timeout</li>
+                <li><strong>execute_rpc (dial)</strong> - Initiates outbound call to human</li>
+                <li><strong>connect</strong> - Bridges human to waiting caller</li>
+                <li><strong>execute_rpc (ai_message)</strong> - Sends message to held caller's AI</li>
+                <li><strong>execute_rpc (ai_unhold)</strong> - Releases caller from hold</li>
+            </ul>
+
+            <h3>Data Flow Between Agents</h3>
+            <p>When HoldAgent places a call on hold, it passes context to CallAgent via URL parameters:</p>
+            <div class="flow-diagram" style="white-space: pre-wrap;">
+dest_swml: /call-agent?call_id={id}&name={name}&reason={reason}
+
+CallAgent extracts these in on_swml_request() and stores them in global_data
+for access by SWAIG functions.</div>
+
+            <h3>Built With</h3>
+            <ul class="feature-list">
+                <li><a href="https://github.com/signalwire/signalwire-agents" target="_blank">SignalWire AI Agents SDK</a></li>
+                <li>AgentServer for multi-agent hosting</li>
+                <li>SWAIG (SignalWire AI Gateway) functions</li>
+                <li>SWML (SignalWire Markup Language)</li>
+            </ul>
+        </div>
+
+        <footer>
+            <p>Powered by <a href="https://signalwire.com" target="_blank">SignalWire</a> |
+            <a href="https://developer.signalwire.com" target="_blank">Documentation</a> |
+            <a href="mailto:support@signalwire.com">Support</a></p>
+        </footer>
     </div>
 </body>
 </html>

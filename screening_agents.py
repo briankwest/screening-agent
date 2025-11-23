@@ -15,8 +15,9 @@ import os
 import urllib.parse
 from pathlib import Path
 from dotenv import load_dotenv
-from signalwire_agents import AgentBase
+from signalwire_agents import AgentBase, AgentServer
 from signalwire_agents.core.function_result import SwaigFunctionResult
+from fastapi.staticfiles import StaticFiles
 
 # Load environment variables from .env file
 load_dotenv()
@@ -44,7 +45,25 @@ class HoldAgent(AgentBase):
             route="/hold-agent"
         )
 
-        # Configure agent personality - call screener named Ethan
+        # Configure agent
+        self._configure_voice()
+        self._configure_prompts()
+        self._configure_tools()
+
+    def _configure_voice(self):
+        """Configure voice and speech settings."""
+        self.add_language(
+            name="English",
+            code="en-US",
+            voice="elevenlabs.josh"
+        )
+        self.add_hints([
+            "calling", "name", "reason", "speak with", "talk to",
+            "message", "callback", "available"
+        ])
+
+    def _configure_prompts(self):
+        """Configure agent personality and instructions."""
         self.prompt_add_section(
             "Personality",
             "You are Ethan, a professional call screener. You are warm, efficient, and courteous. "
@@ -69,23 +88,20 @@ class HoldAgent(AgentBase):
             ]
         )
 
-        # Set initial greeting as part of prompt
         self.prompt_add_section(
             "Greeting",
             "Always start the conversation by saying: 'Hi, this is Ethan. May I ask who's calling?'"
         )
 
-        # Configure LLM parameters
-        self.set_prompt_llm_params(
-            temperature=0.3,
-            top_p=0.9
-        )
+        # Configure AI parameters
+        self.set_params({
+            "temperature": 0.3,
+            "top_p": 0.9
+        })
 
-        # Store base_url for building dest_swml URLs
-        self.base_url = None
-
-        # Define the place_call_on_hold SWAIG function
-        @self.tool(
+    def _configure_tools(self):
+        """Configure SWAIG functions."""
+        self.define_tool(
             name="place_call_on_hold",
             description="Place the caller on hold and dial out to connect them with a human. Use this after collecting the caller's name and reason for calling.",
             parameters={
@@ -101,41 +117,36 @@ class HoldAgent(AgentBase):
                     }
                 },
                 "required": ["caller_name", "reason"]
-            }
+            },
+            handler=self._handle_place_call_on_hold
         )
-        def place_call_on_hold(args, raw_data):
-            """
-            Place caller on hold and dial human:
-            1. Extract call_id from raw_data
-            2. Build dest_swml URL with call info
-            3. Return hold action + execute_rpc dial
-            """
-            call_id = raw_data.get("call_id", "unknown")
-            caller_name = args.get("caller_name", "Unknown")
-            reason = args.get("reason", "Unknown reason")
 
-            # URL encode params for dest_swml
-            encoded_name = urllib.parse.quote(caller_name)
-            encoded_reason = urllib.parse.quote(reason)
+    def _handle_place_call_on_hold(self, args, raw_data):
+        """
+        Place caller on hold and dial human:
+        1. Extract call_id from raw_data
+        2. Build dest_swml URL using SDK's get_full_url() with call info
+        3. Return hold action + execute_rpc dial
+        """
+        call_id = raw_data.get("call_id", "unknown")
+        caller_name = args.get("caller_name", "Unknown")
+        reason = args.get("reason", "Unknown reason")
 
-            # Build dest_swml URL with auth credentials
-            # Format: https://user:password@host/path
-            base = self.base_url or "https://localhost:5001"
-            # Parse the base URL to insert credentials
-            parsed = urllib.parse.urlparse(base)
-            if SWML_BASIC_AUTH_PASSWORD:
-                auth_host = f"{SWML_BASIC_AUTH_USER}:{SWML_BASIC_AUTH_PASSWORD}@{parsed.netloc}"
-            else:
-                auth_host = parsed.netloc
-            dest_swml = f"{parsed.scheme}://{auth_host}/call-agent?call_id={call_id}&reason={encoded_reason}&name={encoded_name}"
+        # URL encode params for dest_swml
+        encoded_name = urllib.parse.quote(caller_name)
+        encoded_reason = urllib.parse.quote(reason)
 
-            result = SwaigFunctionResult("Please hold while I connect you with someone.")
+        # Build dest_swml URL using SDK's get_full_url() which respects SWML_PROXY_URL_BASE
+        # include_auth=True adds basic auth credentials to the URL
+        base_url = self.get_full_url(include_auth=True).rstrip('/')
+        # Replace /hold-agent with /call-agent in the URL
+        base_url = base_url.replace('/hold-agent', '')
+        dest_swml = f"{base_url}/call-agent?call_id={call_id}&reason={encoded_reason}&name={encoded_name}"
 
-            # Add hold action (120 second timeout)
-            result.hold(timeout=120)
-
-            # Add SWML with execute_rpc for dial to human
-            result.add_action("swml", {
+        return (
+            SwaigFunctionResult("Please hold while I connect you with someone.")
+            .hold(timeout=120)
+            .add_action("swml", {
                 "version": "1.0.0",
                 "sections": {
                     "main": [
@@ -157,35 +168,17 @@ class HoldAgent(AgentBase):
                     ]
                 }
             })
-
-            return result
-
-        # Configure voice - ElevenLabs Josh
-        self.add_language(
-            name="English",
-            code="en-US",
-            voice="elevenlabs.josh"
         )
 
-        # Add speech hints for better recognition
-        self.add_hints([
-            "calling", "name", "reason", "speak with", "talk to",
-            "message", "callback", "available"
-        ])
-
     def on_swml_request(self, request_data=None, callback_path=None, request=None):
-        """
-        Override to capture base URL from incoming request for building dest_swml URLs
-        """
+        """Set hold music URL dynamically using SDK's URL handling."""
         if request:
-            # Get the scheme and host from the incoming request
-            scheme = request.url.scheme
-            host = request.headers.get("host", f"localhost:{PORT}")
-            self.base_url = f"{scheme}://{host}"
-
-            # Set hold music URL dynamically
-            hold_music_url = f"{self.base_url}/hold-music.wav"
-            self.set_param("hold_music", hold_music_url)
+            # Use SDK's get_full_url() which respects SWML_PROXY_URL_BASE env var
+            base_url = self.get_full_url(include_auth=False).rstrip('/')
+            # Replace /hold-agent with empty to get server root
+            base_url = base_url.replace('/hold-agent', '')
+            hold_music_url = f"{base_url}/hold-music.wav"
+            self.set_params({"hold_music": hold_music_url})
 
         return super().on_swml_request(request_data, callback_path, request)
 
@@ -204,15 +197,28 @@ class CallAgent(AgentBase):
             route="/call-agent"
         )
 
-        # These will be set dynamically from URL params
-        self.current_call_id = None
-        self.current_reason = None
-        self.current_name = None
+        # Configure agent
+        self._configure_voice()
+        self._configure_prompts()
+        self._configure_tools()
 
-        # For outbound calls, don't wait for user to speak first
-        self.set_param("wait_for_user", True)
+    def _configure_voice(self):
+        """Configure voice and speech settings."""
+        self.add_language(
+            name="English",
+            code="en-US",
+            voice="elevenlabs.josh"
+        )
+        self.add_hints([
+            "accept", "reject", "take the call", "decline",
+            "message", "not available", "busy"
+        ])
 
-        # Configure agent personality
+    def _configure_prompts(self):
+        """Configure agent personality and instructions."""
+        # For outbound calls, wait for user to speak first
+        self.set_params({"wait_for_user": True})
+
         self.prompt_add_section(
             "Personality",
             "You are Ethan, a professional assistant managing incoming calls. "
@@ -235,37 +241,50 @@ class CallAgent(AgentBase):
             ]
         )
 
-        # Configure LLM parameters
-        self.set_prompt_llm_params(
-            temperature=0.3,
-            top_p=0.9
-        )
+        # Configure AI parameters
+        self.set_params({
+            "temperature": 0.3,
+            "top_p": 0.9
+        })
 
-        # Define accept_call SWAIG function
-        @self.tool(
+    def _configure_tools(self):
+        """Configure SWAIG functions."""
+        self.define_tool(
             name="accept_call",
             description="Accept the call and connect the human with the waiting caller.",
             parameters={
                 "type": "object",
                 "properties": {},
                 "required": []
-            }
+            },
+            handler=self._handle_accept_call
         )
-        def accept_call(args, raw_data):
-            """
-            Accept the call - bridge human to waiting caller
-            """
-            # Get original_call_id from global_data (set from URL params in on_swml_request)
-            global_data = raw_data.get("global_data", {})
-            original_call_id = global_data.get("original_call_id") or self.current_call_id or "unknown"
 
-            result = SwaigFunctionResult("Connecting you now.")
+        self.define_tool(
+            name="reject_call",
+            description="Reject the call and send a message to the waiting caller. The caller will be taken off hold and given the message.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "message": {
+                        "type": "string",
+                        "description": "The message to relay to the waiting caller explaining why you cannot take their call"
+                    }
+                },
+                "required": ["message"]
+            },
+            handler=self._handle_reject_call
+        )
 
-            # Add transfer flag
-            result.add_action("transfer", True)
+    def _handle_accept_call(self, args, raw_data):
+        """Accept the call - bridge human to waiting caller."""
+        global_data = raw_data.get("global_data", {})
+        original_call_id = global_data.get("original_call_id", "unknown")
 
-            # Add SWML to connect to the waiting call
-            result.add_action("swml", {
+        return (
+            SwaigFunctionResult("Connecting you now.")
+            .add_action("transfer", True)
+            .add_action("swml", {
                 "sections": {
                     "main": [
                         "answer",
@@ -278,38 +297,17 @@ class CallAgent(AgentBase):
                     ]
                 }
             })
-
-            return result
-
-        # Define reject_call SWAIG function
-        @self.tool(
-            name="reject_call",
-            description="Reject the call and send a message to the waiting caller. The caller will be taken off hold and given the message.",
-            parameters={
-                "type": "object",
-                "properties": {
-                    "message": {
-                        "type": "string",
-                        "description": "The message to relay to the waiting caller explaining why you cannot take their call"
-                    }
-                },
-                "required": ["message"]
-            }
         )
-        def reject_call(args, raw_data):
-            """
-            Reject the call - send message to caller and unhold them
-            """
-            # Get original_call_id from global_data (set from URL params in on_swml_request)
-            global_data = raw_data.get("global_data", {})
-            original_call_id = global_data.get("original_call_id") or self.current_call_id or "unknown"
 
-            message = args.get("message", "I apologize, but no one is available to take your call right now. Please leave a message.")
+    def _handle_reject_call(self, args, raw_data):
+        """Reject the call - send message to caller and unhold them."""
+        global_data = raw_data.get("global_data", {})
+        original_call_id = global_data.get("original_call_id", "unknown")
+        message = args.get("message", "I apologize, but no one is available to take your call right now. Please leave a message.")
 
-            result = SwaigFunctionResult("Understood, I'll let them know.")
-
-            # Add SWML with ai_message and ai_unhold RPCs targeting the original caller
-            result.add_action("swml", {
+        return (
+            SwaigFunctionResult("Understood, I'll let them know.")
+            .add_action("swml", {
                 "version": "1.0.0",
                 "sections": {
                     "main": [
@@ -333,39 +331,17 @@ class CallAgent(AgentBase):
                     ]
                 }
             })
-
-            return result
-
-        # Configure voice - ElevenLabs Josh
-        self.add_language(
-            name="English",
-            code="en-US",
-            voice="elevenlabs.josh"
         )
 
-        # Add speech hints
-        self.add_hints([
-            "accept", "reject", "take the call", "decline",
-            "message", "not available", "busy"
-        ])
-
     def on_swml_request(self, request_data=None, callback_path=None, request=None):
-        """
-        Override to extract URL parameters and configure dynamic prompt
-        """
+        """Extract URL parameters and configure dynamic prompt."""
         if request:
-            # Extract URL params - these are from the original caller's hold agent
+            # Extract URL params from the original caller's hold agent
             original_call_id = request.query_params.get("call_id", "unknown")
             reason = urllib.parse.unquote(request.query_params.get("reason", "unknown reason"))
             name = urllib.parse.unquote(request.query_params.get("name", "unknown caller"))
 
-            # Store in instance for fallback
-            self.current_call_id = original_call_id
-            self.current_reason = reason
-            self.current_name = name
-
-            # IMPORTANT: Store original call_id in global_data so it's available in raw_data
-            # when SWAIG functions are called. This is the call_id we need to connect/message.
+            # Store in global_data so it's available in raw_data for SWAIG functions
             self.set_global_data({
                 "original_call_id": original_call_id,
                 "caller_name": name,
@@ -388,97 +364,44 @@ class CallAgent(AgentBase):
         return super().on_swml_request(request_data, callback_path, request)
 
 
-def create_app():
-    """
-    Create FastAPI app with both agents mounted
-    """
-    from fastapi import FastAPI, Request
-    from fastapi.middleware.cors import CORSMiddleware
-    from fastapi.responses import JSONResponse
-    from fastapi.staticfiles import StaticFiles
+def create_server():
+    """Create AgentServer with both agents and static file mounting."""
+    server = AgentServer(host=HOST, port=PORT)
+    server.register(HoldAgent(), "/hold-agent")
+    server.register(CallAgent(), "/call-agent")
 
-    app = FastAPI(
-        title="Call Screening Agents",
-        description="AI-powered call screening with hold and transfer"
-    )
-
-    # Add CORS middleware
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
-
-    # Create agent instances
-    hold_agent = HoldAgent()
-    call_agent = CallAgent()
-
-    # Health endpoint
-    @app.get("/health")
-    async def health_check():
-        return JSONResponse(content={
-            "status": "healthy",
-            "agents": ["HoldAgent", "CallAgent"]
-        })
-
-    # Ready endpoint
-    @app.get("/ready")
-    async def ready_check():
-        return JSONResponse(content={
-            "status": "ready",
-            "agents": ["HoldAgent", "CallAgent"]
-        })
-
-    # Mount agent routers
-    hold_router = hold_agent.as_router()
-    call_router = call_agent.as_router()
-
-    app.include_router(hold_router, prefix="/hold-agent")
-    app.include_router(call_router, prefix="/call-agent")
-
-    # Explicit POST handlers for SignalWire webhooks
-    @app.post("/hold-agent")
-    async def handle_hold_agent_post(request: Request):
-        return await hold_agent._handle_root_request(request)
-
-    @app.get("/hold-agent")
-    async def handle_hold_agent_get(request: Request):
-        return await hold_agent._handle_root_request(request)
-
-    @app.post("/call-agent")
-    async def handle_call_agent_post(request: Request):
-        return await call_agent._handle_root_request(request)
-
-    @app.get("/call-agent")
-    async def handle_call_agent_get(request: Request):
-        return await call_agent._handle_root_request(request)
-
-    # Mount static files (hold music, etc.)
+    # Mount static files (hold music, index.html, etc.)
     web_dir = Path(__file__).parent / "web"
     if web_dir.exists():
-        app.mount("/", StaticFiles(directory=str(web_dir), html=True), name="static")
+        server.app.mount("/", StaticFiles(directory=str(web_dir), html=True), name="static")
 
-    return app
+    return server
 
 
 if __name__ == "__main__":
-    import uvicorn
+    # Determine the public URL - use SWML_PROXY_URL_BASE if set, otherwise local
+    proxy_url = os.environ.get('SWML_PROXY_URL_BASE', '').rstrip('/')
+    if proxy_url:
+        base_url = proxy_url
+    else:
+        base_url = f"http://{HOST}:{PORT}"
 
     print("=" * 60)
-    print("📞 Call Screening Agents - SignalWire AI")
+    print("Call Screening Agents - SignalWire AI")
     print("=" * 60)
     print(f"\nServer: http://{HOST}:{PORT}")
+    if proxy_url:
+        print(f"Public URL: {proxy_url}")
     print(f"\nEndpoints:")
-    print(f"  Hold Agent:  http://{HOST}:{PORT}/hold-agent")
-    print(f"  Call Agent:  http://{HOST}:{PORT}/call-agent")
-    print(f"  Hold Music:  http://{HOST}:{PORT}/hold-music.wav")
+    print(f"  Hold Agent:  {base_url}/hold-agent")
+    print(f"  Call Agent:  {base_url}/call-agent")
+    print(f"  Hold Music:  {base_url}/hold-music.wav")
+    print(f"  Web UI:      {base_url}/")
     print(f"\nConfiguration:")
     print(f"  TO_NUMBER:   {TO_NUMBER}")
     print(f"  FROM_NUMBER: {FROM_NUMBER}")
     print("=" * 60)
     print("\nPress Ctrl+C to stop\n")
 
-    app = create_app()
-    uvicorn.run(app, host=HOST, port=PORT)
+    server = create_server()
+    server.run()
