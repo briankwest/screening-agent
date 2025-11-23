@@ -17,7 +17,6 @@ from pathlib import Path
 from dotenv import load_dotenv
 from signalwire_agents import AgentBase, AgentServer
 from signalwire_agents.core.function_result import SwaigFunctionResult
-from fastapi.staticfiles import StaticFiles
 
 # Load environment variables from .env file
 load_dotenv()
@@ -367,15 +366,34 @@ class CallAgent(AgentBase):
 
 
 def create_server():
-    """Create AgentServer with both agents and static file mounting."""
+    """Create AgentServer with both agents and static file serving."""
+    from fastapi.responses import FileResponse, HTMLResponse
+
     server = AgentServer(host=HOST, port=PORT)
     server.register(HoldAgent(), "/hold-agent")
     server.register(CallAgent(), "/call-agent")
 
-    # Mount static files (hold music, index.html, etc.)
+    # Serve static files explicitly (avoid mount at / which catches all routes)
     web_dir = Path(__file__).parent / "web"
+
     if web_dir.exists():
-        server.app.mount("/", StaticFiles(directory=str(web_dir), html=True), name="static")
+        # Serve index.html at root
+        index_file = web_dir / "index.html"
+        if index_file.exists():
+            @server.app.get("/", response_class=HTMLResponse)
+            async def serve_index():
+                return index_file.read_text()
+
+        # Serve hold music
+        hold_music_file = web_dir / "hold-music.wav"
+        if hold_music_file.exists():
+            @server.app.get("/hold-music.wav")
+            async def serve_hold_music():
+                return FileResponse(
+                    hold_music_file,
+                    media_type="audio/wav",
+                    filename="hold-music.wav"
+                )
 
     return server
 
