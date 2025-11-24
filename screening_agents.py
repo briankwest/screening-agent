@@ -367,33 +367,18 @@ class CallAgent(AgentBase):
 
 def create_server():
     """Create AgentServer with both agents and static file serving."""
-    from fastapi.responses import FileResponse, HTMLResponse
+    from fastapi.staticfiles import StaticFiles
 
     server = AgentServer(host=HOST, port=PORT)
+
+    # Register agents FIRST (so their routes take priority over static files)
     server.register(HoldAgent(), "/hold-agent")
     server.register(CallAgent(), "/call-agent")
 
-    # Serve static files explicitly (avoid mount at / which catches all routes)
+    # Mount static files AFTER agents (fallback for unmatched routes)
     web_dir = Path(__file__).parent / "web"
-
     if web_dir.exists():
-        # Serve index.html at root
-        index_file = web_dir / "index.html"
-        if index_file.exists():
-            @server.app.get("/", response_class=HTMLResponse)
-            async def serve_index():
-                return index_file.read_text()
-
-        # Serve hold music
-        hold_music_file = web_dir / "hold-music.wav"
-        if hold_music_file.exists():
-            @server.app.get("/hold-music.wav")
-            async def serve_hold_music():
-                return FileResponse(
-                    hold_music_file,
-                    media_type="audio/wav",
-                    filename="hold-music.wav"
-                )
+        server.app.mount("/", StaticFiles(directory=str(web_dir), html=True), name="static")
 
     return server
 
