@@ -1,5 +1,5 @@
 # SignalWire AI Agents SDK
-signalwire-agents>=0.1.55
+signalwire-agents>=1.0.2
 
 # Web framework (included with signalwire-agents but listed for clarity)
 fastapi>=0.104.0

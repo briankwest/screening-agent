@@ -367,18 +367,16 @@ class CallAgent(AgentBase):
 
 def create_server():
     """Create AgentServer with both agents and static file serving."""
-    from fastapi.staticfiles import StaticFiles
-
     server = AgentServer(host=HOST, port=PORT)
 
-    # Register agents FIRST (so their routes take priority over static files)
+    # Register agents
     server.register(HoldAgent(), "/hold-agent")
     server.register(CallAgent(), "/call-agent")
 
-    # Mount static files AFTER agents (fallback for unmatched routes)
+    # Serve static files using SDK's built-in method
     web_dir = Path(__file__).parent / "web"
     if web_dir.exists():
-        server.app.mount("/", StaticFiles(directory=str(web_dir), html=True), name="static")
+        server.serve_static_files(str(web_dir))
 
     return server
 

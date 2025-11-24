@@ -20,7 +20,6 @@
 #   /*          -> Static files (fallback)
 
 from signalwire_agents import AgentBase, AgentServer
-from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 
 HOST = "0.0.0.0"
@@ -47,10 +46,10 @@ def create_server():
     server.register(SupportAgent(), "/support")
     server.register(SalesAgent(), "/sales")
 
-    # Mount static files if directory exists
+    # Serve static files using SDK's built-in method
     web_dir = Path(__file__).parent / "web"
     if web_dir.exists():
-        server.app.mount("/", StaticFiles(directory=str(web_dir), html=True), name="static")
+        server.serve_static_files(str(web_dir))
 
     return server
 
