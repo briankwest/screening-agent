@@ -74,9 +74,9 @@ A dual SignalWire AI Agent system for intelligent call screening and transfer. T
 │  └─────────────────────────────┘    └─────────────────────────────┘         │
 │                                                                             │
 │  ┌─────────────────────────────┐    ┌─────────────────────────────┐         │
-│  │     Static Files            │    │     Health Endpoints        │         │
+│  │     Static Files            │    │     Health Endpoint         │         │
 │  │     /hold-music.wav         │    │     /health                 │         │
-│  │     /index.html             │    │     /ready                  │         │
+│  │     /index.html             │    │                             │         │
 │  └─────────────────────────────┘    └─────────────────────────────┘         │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -378,10 +378,9 @@ The "Endpoints (with auth)" URLs include embedded credentials and can be copied 
 - `GET /hold-music.wav` - Hold music audio
 - `GET /` - Landing page (index.html)
 
-### Health Checks
+### Health Check
 
-- `GET /health` - Returns `{"status": "healthy", "agents": ["HoldAgent", "CallAgent"]}`
-- `GET /ready` - Returns `{"status": "ready", "agents": ["HoldAgent", "CallAgent"]}`
+- `GET /health` - Returns `{"status": "ok", "agents": 2, "routes": ["/hold-agent", "/call-agent"]}`
 
 ## Testing
 
@@ -549,9 +548,9 @@ self.add_language(
 
 ### Change Hold Timeout
 
-Edit `screening_agents.py` line 135:
+Edit the `_handle_place_call_on_hold` method in `screening_agents.py`:
 ```python
-result.hold(timeout=180)  # Change to desired seconds (max 900)
+.hold(timeout=180)  # Change to desired seconds (max 900)
 ```
 
 ### Change Hold Music
@@ -560,11 +559,29 @@ Replace `web/hold-music.wav` with your audio file (WAV format recommended).
 
 ### Modify Agent Personality
 
-Edit the prompt sections in `HoldAgent.__init__()` or `CallAgent.__init__()`:
+Edit the prompt sections in `_configure_prompts()`:
 ```python
 self.prompt_add_section(
     "Personality",
     "Your custom personality description..."
+)
+```
+
+### Add New SWAIG Functions
+
+Use `define_tool()` in `_configure_tools()`:
+```python
+self.define_tool(
+    name="my_function",
+    description="What this function does",
+    parameters={
+        "type": "object",
+        "properties": {
+            "param_name": {"type": "string", "description": "..."}
+        },
+        "required": ["param_name"]
+    },
+    handler=self._handle_my_function
 )
 ```
 
